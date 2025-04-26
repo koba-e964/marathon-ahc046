@@ -182,14 +182,55 @@ fn simple_opt(xy: &[(usize, usize)], board: &[u32]) -> Vec<(char, char)> {
 
 const STONE_COST: i32 = 1_000_000;
 
-fn try_stone(board: &[u32], x: usize, y: usize, tx: usize, ty: usize, rest: &[(usize, usize)]) -> Vec<(char, char)> {
+fn try_stone(board: &[u32], x: usize, y: usize, rest: &[(usize, usize)]) -> Vec<(char, char)> {
+    if rest.is_empty() {
+        return vec![];
+    }
     let mut mv = vec![];
+    let (tx, ty) = rest[0];
     if x == tx && y == ty {
         return mv;
     }
-    let mut cur = opt_one(x, y, tx, ty, board);
-    mv.append(&mut cur);
-    mv
+    let n = board.len();
+    let mut board = board.to_vec();
+    let cur = opt_one(x, y, tx, ty, &board);
+    let coords = move_to_coords(&cur, x, y, &board);
+    let dxy = [(1i32, 0i32), (0, 1), (-1, 0), (0, -1)];
+    let dirs = ['D', 'R', 'U', 'L'];
+    let mut opt = {
+        let tmp = simple_opt(&rest, &board);
+        let mut cur2 = cur.clone();
+        cur2.extend_from_slice(&tmp);
+        cur2
+    };
+    for step in 0..cur.len() + 1 {
+        let next_dir = if step == cur.len() {
+            '*'
+        } else {
+            cur[step].1
+        };
+        let (now_x, now_y) = coords[step];
+        for i in 0..4 {
+            if next_dir == dirs[i] {
+                continue;
+            }
+            let (dx, dy) = dxy[i];
+            let (nx, ny) = (now_x.wrapping_add(dx as usize), now_y.wrapping_add(dy as usize));
+            if nx < n && ny < n {
+                // TODO: remove cloning
+                let mut new_board = board.to_vec();
+                new_board[nx] ^= 1 << ny;
+                let mut me_rest = simple_opt(&rest, &new_board);
+                let mut me = cur.clone();
+                me.insert(step, ('A', dirs[i]));
+                me.extend_from_slice(&me_rest);
+                if me.len() <= opt.len() {
+                    opt = me;
+                }
+            }
+        }
+    }
+    opt
 }
 
 fn main() {
@@ -219,7 +260,15 @@ fn main() {
     }
 
     let board = vec![0; n];
-    let mv = simple_opt(&xy, &board);
+    let mut mv = simple_opt(&xy, &board);
+    for i in 0..m {
+        let mut frm = simple_opt(&xy[..i + 1], &board);
+        let lat = try_stone(&board, xy[i].0, xy[i].1, &xy[i + 1..]);
+        frm.extend_from_slice(&lat);
+        if frm.len() < mv.len() {
+            mv = frm;
+        }
+    }
     assert!(mv.len() <= 2 * n * m);
     for &(a, b) in &mv {
         println!("{} {}", a, b);
