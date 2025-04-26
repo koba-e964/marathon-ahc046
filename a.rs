@@ -236,7 +236,7 @@ fn simple_opt(xy: &[(usize, usize)], board: &[u32]) -> Option<Vec<(char, char)>>
 
 const STONE_TRIAL: i32 = 900;
 
-fn try_stone(rng: &mut Rng, board: &[u32], x: usize, y: usize, rest: &[(usize, usize)]) -> Option<(Vec<(char, char)>, Vec<(char, char)>, Vec<u32>)> {
+fn try_stone(rng: &mut Rng, trial: i32, board: &[u32], x: usize, y: usize, rest: &[(usize, usize)]) -> Option<(Vec<(char, char)>, Vec<(char, char)>, Vec<u32>)> {
     if rest.is_empty() {
         return None;
     }
@@ -289,7 +289,7 @@ fn try_stone(rng: &mut Rng, board: &[u32], x: usize, y: usize, rest: &[(usize, u
     if rest.len() >= 40 - 1 {
         let mut cnt = 0;
         let mut opted = 0;
-        for _ in 0..STONE_TRIAL {
+        for _ in 0..trial {
             let idx = rng.next() % (opt.0.len() as u32 + 1);
             let mut me = opt.0.clone();
             let dir = rng.next() % 4;
@@ -311,32 +311,9 @@ fn try_stone(rng: &mut Rng, board: &[u32], x: usize, y: usize, rest: &[(usize, u
     Some(opt)
 }
 
-fn main() {
-    let conf = Conf {
-        debug: false,
-    };
+fn get(n: usize, xy: &[(usize, usize)], trial: i32) -> Vec<(char, char)> {
     let mut rng = Rng { x: 0xc0ba_e964 };
-
-    let first_line = getline().trim().to_string();
-    let first_line: Vec<usize> = first_line
-        .split_whitespace()
-        .map(|x| x.parse().unwrap())
-        .collect();
-    let (n, m) = (first_line[0], first_line[1]);
-    let mut xy = vec![];
-    for _ in 0..m {
-        let line = getline().trim().to_string();
-        let line: Vec<usize> = line
-            .split_whitespace()
-            .map(|x| x.parse().unwrap())
-            .collect();
-        xy.push((line[0], line[1]));
-    }
-
-    if conf.debug {
-        eprintln!("n: {}, m: {}", n, m);
-    }
-
+    let m = xy.len();
     let init_board = vec![0; n];
     let mut board = vec![0; n];
     let mut mv = simple_opt(&xy, &init_board).unwrap();
@@ -379,7 +356,7 @@ fn main() {
         if sim != Some((xy[i].0, xy[i].1, board.clone())) {
             eprintln!("WTF: {i} {:?} != {:?}", xy[i], sim);
         }
-        if let Some((cur, lat, new_board)) = try_stone(&mut rng, &board, xy[i].0, xy[i].1, &xy[i + 1..]) {
+        if let Some((cur, lat, new_board)) = try_stone(&mut rng, trial, &board, xy[i].0, xy[i].1, &xy[i + 1..]) {
             let sim = simulate(xy[i].0, xy[i].1, &board, &cur);
             if sim != Some((xy[i + 1].0, xy[i + 1].1, new_board.clone())) {
                 eprintln!("WTF 4: {i} {:?} != {:?}", (xy[i + 1], new_board.clone()), sim);
@@ -412,6 +389,41 @@ fn main() {
                 board = new_board;
             }
         }
+    }
+    mv
+}
+
+fn main() {
+    let conf = Conf {
+        debug: false,
+    };
+
+    let first_line = getline().trim().to_string();
+    let first_line: Vec<usize> = first_line
+        .split_whitespace()
+        .map(|x| x.parse().unwrap())
+        .collect();
+    let (n, m) = (first_line[0], first_line[1]);
+    let mut xy = vec![];
+    for _ in 0..m {
+        let line = getline().trim().to_string();
+        let line: Vec<usize> = line
+            .split_whitespace()
+            .map(|x| x.parse().unwrap())
+            .collect();
+        xy.push((line[0], line[1]));
+    }
+
+    if conf.debug {
+        eprintln!("n: {}, m: {}", n, m);
+    }
+
+    let init_board = vec![0; n];
+    let mut board = vec![0; n];
+    let mut mv = get(n, &xy, 0);
+    let mv2 = get(n, &xy, STONE_TRIAL);
+    if mv.len() > mv2.len() {
+        mv = mv2;
     }
     assert!(mv.len() <= 2 * n * m);
     for &(a, b) in &mv {
