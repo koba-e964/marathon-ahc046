@@ -130,6 +130,68 @@ fn opt_one(x: usize, y: usize, tx: usize, ty: usize, board: &[u32]) -> Vec<(char
     mv
 }
 
+fn move_to_coords(mv: &[(char, char)], mut x: usize, mut y: usize, board: &[u32]) -> Vec<(usize, usize)> {
+    let n = board.len();
+    let mut to_b = vec![vec![vec![(0, 0); n]; n]; 4];
+    for i in 0..4 {
+        to_block("DRUL".chars().nth(i).unwrap(), board, &mut to_b[i]);
+    }
+    let mut coords = vec![(x, y)];
+    for &(op1, op2) in mv {
+        match op1 {
+            'M' => {
+                let (dx, dy): (i32, i32) = match op2 {
+                    'D' => (1, 0),
+                    'R' => (0, 1),
+                    'U' => (-1, 0),
+                    'L' => (0, -1),
+                    _ => panic!("Invalid move"),
+                };
+                let nx = x.wrapping_add(dx as usize);
+                let ny = y.wrapping_add(dy as usize);
+                assert!(nx < n && ny < n);
+                coords.push((nx, ny));
+                x = nx;
+                y = ny;
+            }
+            'S' => {
+                let idx = "DRUL".find(op2).unwrap();
+                let (nx, ny) = to_b[idx][x][y];
+                assert!(nx < n && ny < n);
+                coords.push((nx, ny));
+                x = nx;
+                y = ny;
+            }
+            _ => panic!("Invalid operation"),
+        }
+    }
+    coords
+}
+
+fn simple_opt(xy: &[(usize, usize)], board: &[u32]) -> Vec<(char, char)> {
+    let m = xy.len();
+    let mut mv = vec![];
+    for i in 1..m {
+        let x = xy[i - 1].0;
+        let y = xy[i - 1].1;
+        let cur = opt_one(x, y, xy[i].0, xy[i].1, &board);
+        mv.extend(cur);
+    }
+    mv
+}
+
+const STONE_COST: i32 = 1_000_000;
+
+fn try_stone(board: &[u32], x: usize, y: usize, tx: usize, ty: usize, rest: &[(usize, usize)]) -> Vec<(char, char)> {
+    let mut mv = vec![];
+    if x == tx && y == ty {
+        return mv;
+    }
+    let mut cur = opt_one(x, y, tx, ty, board);
+    mv.append(&mut cur);
+    mv
+}
+
 fn main() {
     let mut conf = Conf {
         debug: false,
@@ -156,17 +218,8 @@ fn main() {
         eprintln!("n: {}, m: {}", n, m);
     }
 
-    let mut mv = vec![];
     let board = vec![0; n];
-    for i in 1..m {
-        let x = xy[i - 1].0;
-        let y = xy[i - 1].1;
-        if mv.len() >= 2 * n * m {
-            break;
-        }
-        let cur = opt_one(x, y, xy[i].0, xy[i].1, &board);
-        mv.extend(cur);
-    }
+    let mv = simple_opt(&xy, &board);
     assert!(mv.len() <= 2 * n * m);
     for &(a, b) in &mv {
         println!("{} {}", a, b);
