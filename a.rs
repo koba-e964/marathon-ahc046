@@ -313,8 +313,13 @@ fn main() {
     let init_board = vec![0; n];
     let mut board = vec![0; n];
     let mut mv = simple_opt(&xy, &init_board).unwrap();
-    let mut frm = vec![];
+    let mut frm_layered: Vec<Vec<_>> = vec![];
+    'outer:
     for i in 0..m - 1 {
+        let mut frm = vec![];
+        for l in &frm_layered {
+            frm.extend(l.clone());
+        }
         let sim = simulate(xy[0].0, xy[0].1, &init_board, &mv);
         if let Some((tx, ty, _)) = sim {
             if (tx, ty) != xy[m - 1] {
@@ -325,8 +330,24 @@ fn main() {
             eprintln!("WTF 6: {i} {:?}", sim);
             break;
         }
-        let mut next_frm = frm.clone();
-        next_frm.extend(opt_one(xy[i].0, xy[i].1, xy[i + 1].0, xy[i + 1].1, &board).unwrap());
+        {
+            let mut board = init_board.to_vec();
+            for j in 0..i {
+                let sim = simulate(xy[j].0, xy[j].1, &board, &frm_layered[j]);
+                if let Some((tx, ty, new_board)) = sim.clone() {
+                    if (tx, ty) != xy[j + 1] {
+                        eprintln!("WTF 2: {i} {:?} != {:?}", xy[j + 1], sim);
+                        break 'outer;
+                    }
+                    board = new_board;
+                } else {
+                    eprintln!("WTF 1: {i} {:?}", sim);
+                    break 'outer;
+                }
+            }
+        }
+        let next_plain = opt_one(xy[i].0, xy[i].1, xy[i + 1].0, xy[i + 1].1, &board).unwrap();
+        frm_layered.push(next_plain.clone());
         let sim = simulate(xy[0].0, xy[0].1, &init_board, &frm);
         if sim != Some((xy[i].0, xy[i].1, board.clone())) {
             eprintln!("WTF: {i} {:?} != {:?}", xy[i], sim);
@@ -342,7 +363,6 @@ fn main() {
                 let sim = simulate(xy[0].0, xy[0].1, &init_board, &new_frm);
                 if sim != Some((xy[i + 1].0, xy[i + 1].1, new_board.clone())) {
                     eprintln!("WTF 1: {i} {:?} != {:?}", (xy[i + 1], new_board.clone()), sim);
-                    frm = next_frm;
                     continue;
                 }
 
@@ -353,16 +373,15 @@ fn main() {
                 if let Some((tx, ty, ref _new_board)) = sim {
                     if (tx, ty) != (xy[m - 1].0, xy[m - 1].1) {
                         eprintln!("WTF 5: {i} {:?} != {:?}", (xy[m - 1], new_board.clone()), sim);
-                        frm = next_frm;
                         continue;
                     }
                 } else {
                     eprintln!("WTF 3: {i} {:?} != {:?}", (xy[m - 1], new_board.clone()), sim);
-                    frm = next_frm;
                     continue;
                 }
                 mv = new_mv;
-                frm = new_frm;
+                frm_layered.pop();
+                frm_layered.push(cur.clone());
                 board = new_board;
             }
         }
