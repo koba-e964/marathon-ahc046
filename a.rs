@@ -10,7 +10,7 @@ fn getline() -> String {
     ret
 }
 
-fn opt_one(mut x: usize, mut y: usize, tx: usize, ty: usize, board: &[Vec<i32>]) -> Vec<(char, char)> {
+fn opt_one_move(mut x: usize, mut y: usize, tx: usize, ty: usize, board: &[Vec<i32>]) -> Vec<(char, char)> {
     let mut mv = vec![];
     while x < tx {
         mv.push(('M', 'D'));
@@ -27,6 +27,19 @@ fn opt_one(mut x: usize, mut y: usize, tx: usize, ty: usize, board: &[Vec<i32>])
     while y > ty {
         mv.push(('M', 'L'));
         y -= 1;
+    }
+    mv
+}
+
+fn opt_one(x: usize, y: usize, tx: usize, ty: usize, board: &[Vec<i32>]) -> Vec<(char, char)> {
+    let n = board.len();
+    let mut mv = opt_one_move(x, y, tx, ty, board);
+    for (d, x, y) in [('D', n - 1, y), ('R', x, n - 1), ('U', 0, y), ('L', x, 0)] {
+        let mut mv2 = opt_one_move(x, y, tx, ty, board);
+        mv2.insert(0, ('S', d));
+        if mv2.len() < mv.len() {
+            mv = mv2;
+        }
     }
     mv
 }
