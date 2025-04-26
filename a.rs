@@ -172,6 +172,9 @@ fn opt_one(x: usize, y: usize, tx: usize, ty: usize, board: &[u32]) -> Option<Ve
     let mut cx = tx;
     let mut cy = ty;
     while (cx, cy) != (x, y) {
+        if cx >= n || cy >= n {
+            return None;
+        }
         let (op1, op2, ox, oy) = op[cx][cy];
         mv.push((op1, op2));
         cx = ox;
