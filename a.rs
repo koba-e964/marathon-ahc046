@@ -12,6 +12,20 @@ fn getline() -> String {
     ret
 }
 
+struct Rng {
+    x: u64,
+}
+
+impl Rng {
+    fn next(&mut self) -> u32 {
+        let a = 0xdead_c0de_0013_3331u64;
+        let b = 2457;
+        self.x = self.x.wrapping_mul(a).wrapping_add(b);
+        let x = self.x;
+        ((x ^ x << 10) >> 32) as _
+    }
+}
+
 fn to_block(d: char, board: &[u32], to_b: &mut [Vec<(usize, usize)>]) {
     // board is a bitboard. TODO write a function to return the cell right before the block
     let n = board.len();
@@ -111,10 +125,13 @@ fn opt_one(x: usize, y: usize, tx: usize, ty: usize, board: &[u32]) -> Vec<(char
             }
             let nx = x.wrapping_add(dx as usize);
             let ny = y.wrapping_add(dy as usize);
-            if nx < n && ny < n {
+            if nx < n && ny < n && (board[nx] & (1 << ny)) == 0 {
                 que.push_back((dis + 1, nx, ny, 'M', d, x, y));
             }
         }
+    }
+    if dist[tx][ty] == 2 * n {
+        return vec![];
     }
     // path recovery
     let mut mv = vec![];
@@ -168,16 +185,19 @@ fn move_to_coords(mv: &[(char, char)], mut x: usize, mut y: usize, board: &[u32]
     coords
 }
 
-fn simple_opt(xy: &[(usize, usize)], board: &[u32]) -> Vec<(char, char)> {
+fn simple_opt(xy: &[(usize, usize)], board: &[u32]) -> Option<Vec<(char, char)>> {
     let m = xy.len();
     let mut mv = vec![];
     for i in 1..m {
         let x = xy[i - 1].0;
         let y = xy[i - 1].1;
         let cur = opt_one(x, y, xy[i].0, xy[i].1, &board);
+        if cur.is_empty() {
+            return None;
+        }
         mv.extend(cur);
     }
-    mv
+    Some(mv)
 }
 
 const STONE_COST: i32 = 1_000_000;
@@ -198,7 +218,7 @@ fn try_stone(board: &[u32], x: usize, y: usize, rest: &[(usize, usize)]) -> Vec<
     let dxy = [(1i32, 0i32), (0, 1), (-1, 0), (0, -1)];
     let dirs = ['D', 'R', 'U', 'L'];
     let mut opt = {
-        let tmp = simple_opt(&rest, &board);
+        let tmp = simple_opt(&rest, &board).unwrap();
         let mut cur2 = cur.clone();
         cur2.extend_from_slice(&tmp);
         cur2
@@ -220,12 +240,13 @@ fn try_stone(board: &[u32], x: usize, y: usize, rest: &[(usize, usize)]) -> Vec<
                 // TODO: remove cloning
                 let mut new_board = board.to_vec();
                 new_board[nx] ^= 1 << ny;
-                let mut me_rest = simple_opt(&rest, &new_board);
-                let mut me = cur.clone();
-                me.insert(step, ('A', dirs[i]));
-                me.extend_from_slice(&me_rest);
-                if me.len() <= opt.len() {
-                    opt = me;
+                if let Some(me_rest) = simple_opt(&rest, &new_board) {
+                    let mut me = cur.clone();
+                    me.insert(step, ('A', dirs[i]));
+                    me.extend_from_slice(&me_rest);
+                    if me.len() <= opt.len() {
+                        opt = me;
+                    }
                 }
             }
         }
@@ -260,9 +281,9 @@ fn main() {
     }
 
     let board = vec![0; n];
-    let mut mv = simple_opt(&xy, &board);
+    let mut mv = simple_opt(&xy, &board).unwrap();
     for i in 0..m {
-        let mut frm = simple_opt(&xy[..i + 1], &board);
+        let mut frm = simple_opt(&xy[..i + 1], &board).unwrap();
         let lat = try_stone(&board, xy[i].0, xy[i].1, &xy[i + 1..]);
         frm.extend_from_slice(&lat);
         if frm.len() < mv.len() {
