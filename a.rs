@@ -234,7 +234,7 @@ fn simple_opt(xy: &[(usize, usize)], board: &[u32]) -> Option<Vec<(char, char)>>
     Some(mv)
 }
 
-const STONE_TRIAL: i32 = 1000;
+const STONE_TRIAL: i32 = 900;
 
 fn try_stone(rng: &mut Rng, board: &[u32], x: usize, y: usize, rest: &[(usize, usize)]) -> Option<(Vec<(char, char)>, Vec<(char, char)>, Vec<u32>)> {
     if rest.is_empty() {
@@ -286,10 +286,10 @@ fn try_stone(rng: &mut Rng, board: &[u32], x: usize, y: usize, rest: &[(usize, u
         }
     }
     // Useless
-    if rest.len() >= 35 {
+    if rest.len() >= 40 - 1 {
         let mut cnt = 0;
         let mut opted = 0;
-        for _ in 0..100 {
+        for _ in 0..STONE_TRIAL {
             let idx = rng.next() % (opt.0.len() as u32 + 1);
             let mut me = opt.0.clone();
             let dir = rng.next() % 4;
@@ -306,6 +306,7 @@ fn try_stone(rng: &mut Rng, board: &[u32], x: usize, y: usize, rest: &[(usize, u
                 }
             }
         }
+        eprintln!("cnt: {}, opted: {}", cnt, opted);
     }
     Some(opt)
 }
