@@ -26,6 +26,57 @@ impl Rng {
     }
 }
 
+fn simulate(x: usize, y: usize, init_board: &[u32], mv: &[(char, char)]) -> Option<(usize, usize, Vec<u32>)> {
+    let n = init_board.len();
+    let mut x = x;
+    let mut y = y;
+    let mut board = init_board.to_vec();
+    if board[x] & (1 << y) != 0 {
+        return None;
+    }
+
+    for &(op1, op2) in mv {
+        let (dx, dy): (i32, i32) = match op2 {
+            'D' => (1, 0),
+            'R' => (0, 1),
+            'U' => (-1, 0),
+            'L' => (0, -1),
+            _ => panic!("Invalid move"),
+        };
+        match op1 {
+            'M' => {
+                x = x.wrapping_add(dx as usize);
+                y = y.wrapping_add(dy as usize);
+                if x >= n || y >= n {
+                    return None;
+                }
+                if board[x] & (1 << y) != 0 {
+                    return None;
+                }
+            }
+            'S' => {
+                while x < n && y < n && board[x] & (1 << y) == 0 {
+                    let nx = x.wrapping_add(dx as usize);
+                    let ny = y.wrapping_add(dy as usize);
+                    if nx >= n || ny >= n || board[nx] & (1 << ny) != 0 {
+                        break;
+                    }
+                    x = nx;
+                    y = ny;
+                }
+            }
+            'A' => {
+                let nx = x.wrapping_add(dx as usize);
+                let ny = y.wrapping_add(dy as usize);
+                assert!(nx < n && ny < n);
+                board[nx] ^= 1 << ny;
+            }
+            _ => panic!(),
+        }
+    }
+    Some((x, y, board))
+}
+
 fn to_block(d: char, board: &[u32], to_b: &mut [Vec<(usize, usize)>]) {
     // board is a bitboard. TODO write a function to return the cell right before the block
     let n = board.len();
@@ -95,8 +146,14 @@ fn opt_one_move(mut x: usize, mut y: usize, tx: usize, ty: usize, board: &[u32])
     mv
 }
 
-fn opt_one(x: usize, y: usize, tx: usize, ty: usize, board: &[u32]) -> Vec<(char, char)> {
+fn opt_one(x: usize, y: usize, tx: usize, ty: usize, board: &[u32]) -> Option<Vec<(char, char)>> {
     let n = board.len();
+    if board[tx] & (1 << ty) != 0 {
+        return None;
+    }
+    if board[x] & (1 << y) != 0 {
+        return None;
+    }
     // TODO better calc
     let mut to_b = vec![vec![vec![(0, 0); n]; n]; 4];
     let dirs = ['D', 'R', 'U', 'L'];
@@ -130,9 +187,6 @@ fn opt_one(x: usize, y: usize, tx: usize, ty: usize, board: &[u32]) -> Vec<(char
             }
         }
     }
-    if dist[tx][ty] == 2 * n {
-        return vec![];
-    }
     // path recovery
     let mut mv = vec![];
     let mut cx = tx;
@@ -144,7 +198,7 @@ fn opt_one(x: usize, y: usize, tx: usize, ty: usize, board: &[u32]) -> Vec<(char
         cy = oy;
     }
     mv.reverse();
-    mv
+    Some(mv)
 }
 
 fn move_to_coords(mv: &[(char, char)], mut x: usize, mut y: usize, board: &[u32]) -> Vec<(usize, usize)> {
@@ -191,10 +245,7 @@ fn simple_opt(xy: &[(usize, usize)], board: &[u32]) -> Option<Vec<(char, char)>>
     for i in 1..m {
         let x = xy[i - 1].0;
         let y = xy[i - 1].1;
-        let cur = opt_one(x, y, xy[i].0, xy[i].1, &board);
-        if cur.is_empty() {
-            return None;
-        }
+        let cur = opt_one(x, y, xy[i].0, xy[i].1, &board)?;
         mv.extend(cur);
     }
     Some(mv)
@@ -202,26 +253,22 @@ fn simple_opt(xy: &[(usize, usize)], board: &[u32]) -> Option<Vec<(char, char)>>
 
 const STONE_COST: i32 = 1_000_000;
 
-fn try_stone(board: &[u32], x: usize, y: usize, rest: &[(usize, usize)]) -> Vec<(char, char)> {
+fn try_stone(board: &[u32], x: usize, y: usize, rest: &[(usize, usize)]) -> Option<(Vec<(char, char)>, Vec<(char, char)>, Vec<u32>)> {
     if rest.is_empty() {
-        return vec![];
+        return None;
     }
-    let mut mv = vec![];
     let (tx, ty) = rest[0];
-    if x == tx && y == ty {
-        return mv;
-    }
     let n = board.len();
-    let mut board = board.to_vec();
-    let cur = opt_one(x, y, tx, ty, &board);
+    let board = board.to_vec();
+    let cur = opt_one(x, y, tx, ty, &board)?;
     let coords = move_to_coords(&cur, x, y, &board);
     let dxy = [(1i32, 0i32), (0, 1), (-1, 0), (0, -1)];
     let dirs = ['D', 'R', 'U', 'L'];
     let mut opt = {
-        let tmp = simple_opt(&rest, &board).unwrap();
+        let tmp = simple_opt(&rest, &board)?;
         let mut cur2 = cur.clone();
         cur2.extend_from_slice(&tmp);
-        cur2
+        (cur2, tmp, board.clone())
     };
     for step in 0..cur.len() + 1 {
         let next_dir = if step == cur.len() {
@@ -243,15 +290,19 @@ fn try_stone(board: &[u32], x: usize, y: usize, rest: &[(usize, usize)]) -> Vec<
                 if let Some(me_rest) = simple_opt(&rest, &new_board) {
                     let mut me = cur.clone();
                     me.insert(step, ('A', dirs[i]));
-                    me.extend_from_slice(&me_rest);
-                    if me.len() <= opt.len() {
-                        opt = me;
+                    if &simulate(x, y, &board, &me) == &Some((tx, ty, new_board.clone())) {
+                        let last = rest[rest.len() - 1];
+                        if simulate(tx, ty, &new_board, &me_rest) == Some((last.0, last.1, new_board.clone())) {
+                            if me.len() + me_rest.len() <= opt.0.len() + opt.1.len() {
+                                opt = (me, me_rest, new_board);
+                            }
+                        }
                     }
                 }
             }
         }
     }
-    opt
+    Some(opt)
 }
 
 fn main() {
@@ -280,14 +331,52 @@ fn main() {
         eprintln!("n: {}, m: {}", n, m);
     }
 
-    let board = vec![0; n];
-    let mut mv = simple_opt(&xy, &board).unwrap();
-    for i in 0..m {
-        let mut frm = simple_opt(&xy[..i + 1], &board).unwrap();
-        let lat = try_stone(&board, xy[i].0, xy[i].1, &xy[i + 1..]);
-        frm.extend_from_slice(&lat);
-        if frm.len() < mv.len() {
-            mv = frm;
+    let init_board = vec![0; n];
+    let mut board = vec![0; n];
+    let mut mv = simple_opt(&xy, &init_board).unwrap();
+    let mut frm = vec![];
+    for i in 0..m - 1 {
+        let mut next_frm = frm.clone();
+        next_frm.extend(opt_one(xy[i].0, xy[i].1, xy[i + 1].0, xy[i + 1].1, &board).unwrap());
+        let sim = simulate(xy[0].0, xy[0].1, &init_board, &frm);
+        if sim != Some((xy[i].0, xy[i].1, board.clone())) {
+            eprintln!("WTF: {i} {:?} != {:?}", xy[i], sim);
+            break;
+        }
+        if let Some((cur, lat, new_board)) = try_stone(&board, xy[i].0, xy[i].1, &xy[i + 1..]) {
+            let sim = simulate(xy[i].0, xy[i].1, &board, &cur);
+            if sim != Some((xy[i + 1].0, xy[i + 1].1, new_board.clone())) {
+                eprintln!("WTF 4: {i} {:?} != {:?}", (xy[i + 1], new_board.clone()), sim);
+            }
+            if frm.len() + cur.len() + lat.len() < mv.len() {
+                let mut new_frm = frm.clone();
+                new_frm.extend(cur.clone());
+                let sim = simulate(xy[0].0, xy[0].1, &init_board, &new_frm);
+                if sim != Some((xy[i + 1].0, xy[i + 1].1, new_board.clone())) {
+                    eprintln!("WTF 1: {i} {:?} != {:?}", (xy[i + 1], new_board.clone()), sim);
+                    frm = next_frm;
+                    continue;
+                }
+
+                let mut new_mv = frm.clone();
+                new_mv.extend(cur.clone());
+                new_mv.extend(lat);
+                let sim = simulate(xy[0].0, xy[0].1, &init_board, &new_mv);
+                if let Some((tx, ty, ref _new_board)) = sim {
+                    if (tx, ty) != (xy[m - 1].0, xy[m - 1].1) {
+                        eprintln!("WTF 5: {i} {:?} != {:?}", (xy[m - 1], new_board.clone()), sim);
+                        frm = next_frm;
+                        continue;
+                    }
+                } else {
+                    eprintln!("WTF 3: {i} {:?} != {:?}", (xy[m - 1], new_board.clone()), sim);
+                    frm = next_frm;
+                    continue;
+                }
+                mv = new_mv;
+                frm = new_frm;
+                board = new_board;
+            }
         }
     }
     assert!(mv.len() <= 2 * n * m);
