@@ -3,7 +3,6 @@ use std::collections::*;
 #[derive(Clone, Copy)]
 struct Conf {
     debug: bool,
-    climb0_count: i32,
 }
 
 fn getline() -> String {
@@ -68,7 +67,9 @@ fn simulate(x: usize, y: usize, init_board: &[u32], mv: &[(char, char)]) -> Opti
             'A' => {
                 let nx = x.wrapping_add(dx as usize);
                 let ny = y.wrapping_add(dy as usize);
-                assert!(nx < n && ny < n);
+                if !(nx < n && ny < n) {
+                    return None;
+                }
                 board[nx] ^= 1 << ny;
             }
             _ => panic!(),
@@ -123,27 +124,6 @@ fn to_block(d: char, board: &[u32], to_b: &mut [Vec<(usize, usize)>]) {
         }
         _ => panic!("Invalid direction"),
     }
-}
-
-fn opt_one_move(mut x: usize, mut y: usize, tx: usize, ty: usize, board: &[u32]) -> Vec<(char, char)> {
-    let mut mv = vec![];
-    while x < tx {
-        mv.push(('M', 'D'));
-        x += 1;
-    }
-    while y < ty {
-        mv.push(('M', 'R'));
-        y += 1;
-    }
-    while x > tx {
-        mv.push(('M', 'U'));
-        x -= 1;
-    }
-    while y > ty {
-        mv.push(('M', 'L'));
-        y -= 1;
-    }
-    mv
 }
 
 fn opt_one(x: usize, y: usize, tx: usize, ty: usize, board: &[u32]) -> Option<Vec<(char, char)>> {
@@ -308,7 +288,6 @@ fn try_stone(board: &[u32], x: usize, y: usize, rest: &[(usize, usize)]) -> Opti
 fn main() {
     let mut conf = Conf {
         debug: false,
-        climb0_count: 0,
     };
 
     let first_line = getline().trim().to_string();
@@ -336,12 +315,21 @@ fn main() {
     let mut mv = simple_opt(&xy, &init_board).unwrap();
     let mut frm = vec![];
     for i in 0..m - 1 {
+        let sim = simulate(xy[0].0, xy[0].1, &init_board, &mv);
+        if let Some((tx, ty, _)) = sim {
+            if (tx, ty) != xy[m - 1] {
+                eprintln!("WTF 7: {i} {:?} != {:?}", xy[i + 1], sim);
+                break;
+            }
+        } else {
+            eprintln!("WTF 6: {i} {:?}", sim);
+            break;
+        }
         let mut next_frm = frm.clone();
         next_frm.extend(opt_one(xy[i].0, xy[i].1, xy[i + 1].0, xy[i + 1].1, &board).unwrap());
         let sim = simulate(xy[0].0, xy[0].1, &init_board, &frm);
         if sim != Some((xy[i].0, xy[i].1, board.clone())) {
             eprintln!("WTF: {i} {:?} != {:?}", xy[i], sim);
-            break;
         }
         if let Some((cur, lat, new_board)) = try_stone(&board, xy[i].0, xy[i].1, &xy[i + 1..]) {
             let sim = simulate(xy[i].0, xy[i].1, &board, &cur);
