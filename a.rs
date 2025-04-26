@@ -234,9 +234,9 @@ fn simple_opt(xy: &[(usize, usize)], board: &[u32]) -> Option<Vec<(char, char)>>
     Some(mv)
 }
 
-const STONE_COST: i32 = 1_000_000;
+const STONE_TRIAL: i32 = 1000;
 
-fn try_stone(board: &[u32], x: usize, y: usize, rest: &[(usize, usize)]) -> Option<(Vec<(char, char)>, Vec<(char, char)>, Vec<u32>)> {
+fn try_stone(rng: &mut Rng, board: &[u32], x: usize, y: usize, rest: &[(usize, usize)]) -> Option<(Vec<(char, char)>, Vec<(char, char)>, Vec<u32>)> {
     if rest.is_empty() {
         return None;
     }
@@ -285,13 +285,36 @@ fn try_stone(board: &[u32], x: usize, y: usize, rest: &[(usize, usize)]) -> Opti
             }
         }
     }
+    // Useless
+    if rest.len() >= 35 {
+        let mut cnt = 0;
+        let mut opted = 0;
+        for _ in 0..100 {
+            let idx = rng.next() % (opt.0.len() as u32 + 1);
+            let mut me = opt.0.clone();
+            let dir = rng.next() % 4;
+            me.insert(idx as usize, ('A', dirs[dir as usize]));
+            if let Some((nx, ny, new_board)) = simulate(x, y, &board, &me) {
+                if (nx, ny) == (tx, ty) {
+                    if let Some(rest) = simple_opt(&rest, &new_board) {
+                        cnt += 1;
+                        if me.len() + rest.len() < opt.0.len() + opt.1.len() {
+                            opted += 1;
+                            opt = (me, rest, new_board);
+                        }
+                    }
+                }
+            }
+        }
+    }
     Some(opt)
 }
 
 fn main() {
-    let mut conf = Conf {
+    let conf = Conf {
         debug: false,
     };
+    let mut rng = Rng { x: 0xc0ba_e964 };
 
     let first_line = getline().trim().to_string();
     let first_line: Vec<usize> = first_line
@@ -355,7 +378,7 @@ fn main() {
         if sim != Some((xy[i].0, xy[i].1, board.clone())) {
             eprintln!("WTF: {i} {:?} != {:?}", xy[i], sim);
         }
-        if let Some((cur, lat, new_board)) = try_stone(&board, xy[i].0, xy[i].1, &xy[i + 1..]) {
+        if let Some((cur, lat, new_board)) = try_stone(&mut rng, &board, xy[i].0, xy[i].1, &xy[i + 1..]) {
             let sim = simulate(xy[i].0, xy[i].1, &board, &cur);
             if sim != Some((xy[i + 1].0, xy[i + 1].1, new_board.clone())) {
                 eprintln!("WTF 4: {i} {:?} != {:?}", (xy[i + 1], new_board.clone()), sim);
