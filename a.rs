@@ -10,6 +10,27 @@ fn getline() -> String {
     ret
 }
 
+fn opt_one(mut x: usize, mut y: usize, tx: usize, ty: usize, board: &[Vec<i32>]) -> Vec<(char, char)> {
+    let mut mv = vec![];
+    while x < tx {
+        mv.push(('M', 'D'));
+        x += 1;
+    }
+    while y < ty {
+        mv.push(('M', 'R'));
+        y += 1;
+    }
+    while x > tx {
+        mv.push(('M', 'U'));
+        x -= 1;
+    }
+    while y > ty {
+        mv.push(('M', 'L'));
+        y -= 1;
+    }
+    mv
+}
+
 fn main() {
     let mut conf = Conf {
         debug: false,
@@ -37,31 +58,20 @@ fn main() {
     }
 
     let mut mv = vec![];
-    let mut x = xy[0].0;
-    let mut y = xy[0].1;
+    let board = vec![vec![0; n]; n];
     for i in 1..m {
+        let x = xy[i - 1].0;
+        let y = xy[i - 1].1;
         if mv.len() >= 2 * n * m {
             break;
         }
-        while x < xy[i].0 {
-            mv.push(('M', 'D'));
-            x += 1;
-        }
-        while y < xy[i].1 {
-            mv.push(('M', 'R'));
-            y += 1;
-        }
-        while x > xy[i].0 {
-            mv.push(('M', 'U'));
-            x -= 1;
-        }
-        while y > xy[i].1 {
-            mv.push(('M', 'L'));
-            y -= 1;
-        }
+        let cur = opt_one(x, y, xy[i].0, xy[i].1, &board);
+        mv.extend(cur);
     }
-    mv.truncate(2 * n * m);
-    for (a, b) in mv {
+    assert!(mv.len() <= 2 * n * m);
+    for &(a, b) in &mv {
         println!("{} {}", a, b);
     }
+    let turn = mv.len();
+    eprintln!("# turn = {}, score = {}", turn, m + 2 * n * m - turn);
 }
