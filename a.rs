@@ -234,7 +234,7 @@ fn simple_opt(xy: &[(usize, usize)], board: &[u32]) -> Option<Vec<(char, char)>>
     Some(mv)
 }
 
-const STONE_TRIAL: i32 = 900;
+const STONE_TRIAL: i32 = 1200;
 
 fn try_stone(rng: &mut Rng, trial: i32, board: &[u32], x: usize, y: usize, rest: &[(usize, usize)]) -> Option<(Vec<(char, char)>, Vec<(char, char)>, Vec<u32>)> {
     if rest.is_empty() {
